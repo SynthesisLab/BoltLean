@@ -1,0 +1,10 @@
+name = "bolt_lean"
+version = "0.1.0"
+defaultTargets = ["bolt_lean"]
+
+[[lean_lib]]
+name = "BoltLean"
+
+[[lean_exe]]
+name = "bolt_lean"
+root = "Main"
