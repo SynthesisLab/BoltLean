@@ -64,19 +64,43 @@ namespace Formula
 
   theorem congruence_finally (phi1 phi2 : Formula n) :
   (equivalence phi1 phi2) → equivalence (Finally phi1) (Finally phi2) := by
-  unfold equivalence
   intro h1 h2
-  rw eval2eval_aux at h1
-  unfold eval at h1
-  unfold eval
-  unfold eval_aux
-  simp
-  match h2.predicates with
-    | List.nil => simp
-    | head::tail => simp
-                    constructor
-                    . intro h
+  rw [eval2eval_aux] at h1
+  . unfold eval
+    unfold eval_aux
+    simp
+    match h2.predicates with
+      | List.nil => simp
+      | head::tail => simp
                       constructor
+                        <;> intro h
+                        <;> have ⟨j, hj⟩ := h
+                        <;> exists j
+                        <;> first | rw [h1] | rw [←h1]
+                        <;> exact hj
+                      exact hj
+  . exact h2.pos_n_pred
+
+
+  theorem congruence_globally (phi1 phi2 : Formula n) :
+  (equivalence phi1 phi2) → equivalence (Globally phi1) (Globally phi2) := by
+  intro h1 h2
+  rw [eval2eval_aux] at h1
+  . unfold eval
+    unfold eval_aux
+    simp
+    match h2.predicates with
+      | List.nil => simp
+      | head::tail => simp
+                      constructor
+                        <;> (
+                          intro h j
+                          first | rw [h1] | rw [←h1]
+                          apply h
+                        )
+  . exact h2.pos_n_pred
+
+
 
 
   theorem congruence (phi1 psi1 phi2 psi2 : Formula n) :
