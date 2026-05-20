@@ -1,4 +1,5 @@
 import BoltLean.Ltl
+import BoltLean.Helpers
 
 namespace Trace
   def get_exact_var (t: Trace n) (i: Fin t.length) (v: Fin n): Formula n :=
@@ -102,103 +103,99 @@ namespace Trace
       . left
         exact hl
 
-  -- theorem exact_at_pos_eval_iff
-  --   (t t': Trace n) (i: Fin t.length) (i': Fin t'.length) :
-  --     (t.exact_at_pos i).eval_aux t' i'
-  --       ↔ (∀ (v : Fin n), t.predicates[v][i] = t'.predicates[v][i']) := by
-  --   -- Proof by induction or well-founded recursion on (n - v)
-  --   constructor
-  --   . intro h v
-  --     unfold exact_at_pos at h
-  --     unfold Formula.eval_aux at h
-  --     simp at h
-  --   . sorry
+  theorem exact_at_pos_eval_iff
+    (t t': Trace n) (i: Fin t.length) (i': Fin t'.length) :
+      (t.exact_at_pos i).eval_aux t' i'
+        ↔ (∀ (v : Fin n), t.predicates[v][i] = t'.predicates[v][i']) := by
+    -- Proof by induction or well-founded recursion on (n - v)
+    constructor
+    . intro h v
+      unfold exact_at_pos at h
+      unfold Formula.eval_aux at h
+      simp at h
+    . sorry
 
-  -- theorem not_eval_aux_exact_at_pos_if_diff_pred (t t': Trace n)
-  --     (i: Fin t.length) (v: Fin n)
-  --     (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-  --   ¬(t.exact_at_pos i v).eval_aux t' ⟨i.val, hi⟩ := by
-  --  unfold exact_at_pos
-  --  simp
-  --  split
-  --  . next hif =>
-  --                simp [Formula.eval_aux]
-  --                intro he
-  --                simp at h
-  --                rw [eq_comm] at he
-  --                exact absurd he h
-  --  . next hnif => simp [Formula.eval_aux]
-  --                 simp at h
-  --                 rw [eq_comm] at h
-  --                 exact h
+  theorem not_eval_aux_exact_at_pos_if_diff_pred (t t': Trace n)
+      (i: Fin t.length) (v: Fin n)
+      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
+    ¬(t.exact_at_pos i v).eval_aux t' ⟨i.val, hi⟩ := by
+   unfold exact_at_pos
+   simp
+   split
+   . next hif =>
+                 simp [Formula.eval_aux]
+                 intro he
+                 simp at h
+                 rw [eq_comm] at he
+                 exact absurd he h
+   . next hnif => simp [Formula.eval_aux]
+                  simp at h
+                  rw [eq_comm] at h
+                  exact h
 
-  -- theorem not_eval_aux_exact_at_pos_if_diff_pred_lt (t t': Trace n)
-  --     (i: Fin t.length) (v v': Fin n) (hv: v' ≤ v)
-  --     (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-  --   ¬(t.exact_at_pos i v').eval_aux t' ⟨i.val, hi⟩ := by
-  --   by_cases he: v' = v
-  --   . rw [he]
-  --     apply not_eval_aux_exact_at_pos_if_diff_pred <;> assumption
-  --   . unfold exact_at_pos
-  --     have hv': v' < n-1 := by omega
-  --     simp [hv']
-  --     simp [Formula.eval_aux]
-  --     intro hp
-  --     let v'' := v'.val+1
-  --     have hv'': v'' ≤ v := by omega
-  --     apply not_eval_aux_exact_at_pos_if_diff_pred_lt t t' i v ⟨v'', by omega⟩ hv'' hi h
+  theorem not_eval_aux_exact_at_pos_if_diff_pred_lt (t t': Trace n)
+      (i: Fin t.length) (v v': Fin n) (hv: v' ≤ v)
+      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
+    ¬(t.exact_at_pos i v').eval_aux t' ⟨i.val, hi⟩ := by
+    by_cases he: v' = v
+    . rw [he]
+      apply not_eval_aux_exact_at_pos_if_diff_pred <;> assumption
+    . unfold exact_at_pos
+      have hv': v' < n-1 := by omega
+      simp [hv']
+      simp [Formula.eval_aux]
+      intro hp
+      let v'' := v'.val+1
+      have hv'': v'' ≤ v := by omega
+      apply not_eval_aux_exact_at_pos_if_diff_pred_lt t t' i v ⟨v'', by omega⟩ hv'' hi h
 
-  -- theorem not_eval_aux_exact_aux_if_diff_pred (t t': Trace n)
-  --     (i: Fin t.length) (v: Fin n)
-  --     (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-  --   ¬(t.exact_aux i).eval_aux t' ⟨i.val, hi⟩ := by
-  --   unfold exact_aux
-  --   split
-  --   . next hif => simp
-  --                 unfold Formula.eval_aux
-  --                 rw [Classical.not_and_iff_not_or_not]
-  --                 left
-  --                 apply not_eval_aux_exact_at_pos_if_diff_pred_lt
-  --                 all_goals try assumption
-  --                 apply Nat.zero_le
-  --   . next hnif => simp
-  --                  apply not_eval_aux_exact_at_pos_if_diff_pred_lt
-  --                  all_goals try assumption
-  --                  apply Nat.zero_le
+  theorem not_eval_aux_exact_aux_if_diff_pred (t t': Trace n)
+      (i: Fin t.length) (v: Fin n)
+      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
+    ¬(t.exact_aux i).eval_aux t' ⟨i.val, hi⟩ := by
+    unfold exact_aux
+    split
+    . next hif => simp
+                  unfold Formula.eval_aux
+                  rw [Classical.not_and_iff_not_or_not]
+                  left
+                  apply not_eval_aux_exact_at_pos_if_diff_pred_lt
+                  all_goals try assumption
+                  apply Nat.zero_le
+    . next hnif => simp
+                   apply not_eval_aux_exact_at_pos_if_diff_pred_lt
+                   all_goals try assumption
+                   apply Nat.zero_le
 
 
-  -- theorem not_eval_aux_exact_aux_if_diff_pred_lt (t t': Trace n)
-  --     (i i': Fin t.length) (hi': i' ≤ i) (v: Fin n)
-  --     (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-  --   ¬(t.exact_aux i').eval_aux t' ⟨i'.val,by omega⟩ := by
-  --   by_cases he: i = i'
-  --   . subst he
-  --     apply not_eval_aux_exact_aux_if_diff_pred <;> assumption
-  --   . unfold exact_aux
-  --     simp
-  --     have h1: i' < t.length - 1 := by omega
-  --     simp [h1]
-  --     unfold Formula.eval_aux
-  --     simp
-  --     intro h2
-  --     simp [Formula.eval_aux]
-  --     intro
-  --     apply not_eval_aux_exact_aux_if_diff_pred_lt
-  --     all_goals try assumption
-  --     rw [Nat.ne_iff_lt_or_gt] at he
-  --     sorry
+  theorem not_eval_aux_exact_aux_if_diff_pred_lt (t t': Trace n)
+      (i i': Fin t.length) (hi': i' ≤ i) (v: Fin n)
+      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
+    ¬(t.exact_aux i').eval_aux t' ⟨i'.val,by omega⟩ := by
+    by_cases he: i = i'
+    . subst he
+      apply not_eval_aux_exact_aux_if_diff_pred <;> assumption
+    . unfold exact_aux
+      simp
+      have h1: i' < t.length - 1 := by omega
+      simp [h1]
+      unfold Formula.eval_aux
+      simp
+      intro h2
+      simp [Formula.eval_aux]
+      intro
+      apply not_eval_aux_exact_aux_if_diff_pred_lt
+      all_goals try assumption
+      rw [Nat.ne_iff_lt_or_gt] at he
+      sorry
 
-  -- /-- Soundness: `t.exact` only accepts `t`-/
-  -- theorem exact_eval_only (t t': Trace n) (h: t ≠ t'): ¬(t.exact).eval t' := by
-  --   have h1 := diff_exist_diff_var t t' h
-  --   match h1 with
-  --   | Or.inl h2 => sorry
-  --   | Or.inr h2 => match h2 with
-  --     | ⟨i, v, h', hd⟩ => unfold exact
-  --                         unfold Formula.eval
-  --                         apply not_eval_aux_exact_aux_if_diff_pred t t' i
-  --                         assumption
-
+  open Classical
+  /-- Soundness: `t.exact` only accepts `t`-/
+  theorem exact_eval_only (t t': Trace n):
+    (t.exact).eval t' → t = t' := by
+      rw [my_contra]
+      intro hne
+      sorry
 end Trace
 
 -- theorem exact_eval (t: Trace n) :
