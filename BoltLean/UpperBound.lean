@@ -2,203 +2,263 @@ import BoltLean.Ltl
 import BoltLean.Helpers
 
 namespace Trace
-  def get_exact_var (t: Trace n) (i: Fin t.length) (v: Fin n): Formula n :=
-    Formula.Var v (not t.predicates[v][i])
+  def get_exact_var (pos: Vector Bool n) (v: Fin n): Formula n :=
+    Formula.Var v (not pos[v])
 
-  /-- Auxiliary functions for constructing a formula that is true on t and only on t-/
-  def exact_at_pos (t: Trace n) (i: Fin t.length): Formula n :=
-    let all_indices := List.finRange n
-    let all_var := all_indices.map (t.get_exact_var i)
+  /-- Auxiliary function for constructing a formula that is true on t and only on t-/
+  def exact_at_pos (pos: Vector Bool n) (l: List (Fin n)): Formula n :=
+    let all_var := l.map (get_exact_var pos)
     all_var.foldr (fun phi psi => phi.And psi) Formula.True
 
-
-  def subrange (start: Nat) : List (Fin n) :=
-    if h: start < n then
-      ⟨start, by omega⟩ :: subrange (start + 1)
-    else
-      []
-
   def exact (t: Trace n) : Formula n :=
-    let all_indices := subrange 0
-    let all_exact := all_indices.map t.exact_at_pos
-    -- Ensure that the trace has the right length
-    -- by checking WeakNext False at the end
-    all_exact.foldr (fun phi psi => phi.And psi.WeakNext) Formula.False
+    match t with
+    | .nil => Formula.False.Globally
+    | head :: tail => (exact_at_pos head (List.finRange n)).And (exact tail).Next
 
-  -- Scaffolding for proving that the `exact` construction works:
+  -- We now prove that the `exact` construction works:
   -- - it is true on `t`
   -- - it is only true on `t`
-  /-- Helper lemma: Proves that the folded AND formula is true for ANY list of variables -/
-  theorem exact_at_pos_eval_aux_list (t: Trace n) (i: Fin t.length) (vars : List (Fin n)):
-    ((vars.map (t.get_exact_var i)).foldr (fun phi psi => phi.And psi) Formula.True).eval_aux t i := by
-    induction vars with
-    | nil => simp [Formula.eval_aux]
-    | cons hd tl ih =>
-      simp [Formula.eval_aux, get_exact_var]
-      exact ih
 
-  /-- Correctness: `t.exact_at_pos i` evaluates to true on `t` at `i` -/
-  theorem exact_at_pos_eval_aux (t: Trace n) (i: Fin t.length):
-    (t.exact_at_pos i).eval_aux t i := by
-    unfold exact_at_pos
-    apply exact_at_pos_eval_aux_list
-
-  /-- Helper lemma: Evaluates the formula suffix starting from an arbitrary time `i` -/
-  theorem exact_eval_suffix (t: Trace n) (rem: Nat) (i: Fin t.length) (h_rem: t.length - i.val = rem) :
-    (((subrange i
-      ).map t.exact_at_pos
-     ).foldr
-        (fun phi psi => phi.And psi.WeakNext)
-        Formula.False
-    ).eval_aux t i := by
-    -- We do induction on the number of remaining steps in the trace
-    induction rem generalizing i with
-    | zero => omega
-    | succ k ih =>
-      unfold subrange
-      by_cases hi: i < t.length
-      . simp [hi]
-        unfold Formula.eval_aux
-        constructor
-        . exact exact_at_pos_eval_aux t i
-        . unfold Formula.eval_aux
-          intro hi
-          apply ih ⟨i.val+1, by omega⟩
-          have hik : t.length - (i.val+1) = k := by omega
-          omega
-      . have he: i.val = t.length -1 := by
-          omega
-        simp [he]
-        omega
+  /-- Helper Lemma for correctness -/
+  theorem exact_at_pos_eval (pos: Vector Bool n) (t: Trace n):
+    (exact_at_pos pos (List.finRange n)).eval (pos :: t) := by
+      unfold exact_at_pos
+      simp
+      -- Below says: We're going to show it for an arbitrary list `l` instead.
+      generalize List.finRange n = l
+      induction l with
+      | nil => simp [Formula.eval]
+      | cons v vs ih => simp [Formula.eval, ih, get_exact_var]
 
   /-- Correctness: `t.exact` evaluates to true on `t` -/
-  theorem exact_eval (t: Trace n) : (t.exact).eval t := by
-    unfold exact
-    unfold Formula.eval
-    have h_rem : t.length - 0 = t.length := by omega
-    have h := exact_eval_suffix t (t.length) ⟨0, t.pos_length⟩ h_rem
-    simp
-    exact h
+  theorem exact_eval (t: Trace n):
+    (t.exact).eval t := by
+    induction t with
+    | nil => simp [exact, Formula.eval]
+    | cons hd tl ih =>
+      simp [Formula.eval, exact]
+      constructor
+      . exact exact_at_pos_eval hd tl
+      . exact ih
 
   -- Soundness
-  theorem diff_exist_diff_var (t t': Trace n) (h: t ≠ t'):
-    t.length ≠ t'.length
-      ∨ exists (i: Fin t.length) (v: Fin n) (h': i < t'.length),
-        t.predicates[v][i] ≠ t'.predicates[v][i] := by
-      by_cases hl: t.length = t'.length
-      . right
-        apply Classical.byContradiction
-        intro h_contra
-        apply h
-        cases t
-        cases t'
-        simp at hl
-        subst hl
-        simp at *
-        apply Vector.ext
-        intro v hv
-        apply Vector.ext
-        intro i hi
-        exact h_contra ⟨i, hi⟩ ⟨v, hv⟩
-      . left
-        exact hl
+  /-- Taking the `And` of a list of formulas and evaluating is the same as
+  evaluating and taking the `And`.
+  -/
+  theorem foldr_and_aux (l: List (Formula n)) (t: Trace n):
+    (l.foldr Formula.And Formula.True).eval t
+      → ∀ f ∈ l, f.eval t := by
+        induction l with
+        | nil => simp
+        | cons hd tl ih =>
+          intro he f hm
+          cases hm
+          . unfold List.foldr at he
+            unfold Formula.eval at he
+            simp [*] at he
+            cases t <;> simp at he <;> exact he.left
+          . next h_in =>
+            unfold List.foldr at he
+            unfold Formula.eval at he
+            simp [*] at he
+            cases t <;> simp at he <;> apply ih he.right f h_in
 
-  theorem exact_at_pos_eval_iff
-    (t t': Trace n) (i: Fin t.length) (i': Fin t'.length) :
-      (t.exact_at_pos i).eval_aux t' i'
-        ↔ (∀ (v : Fin n), t.predicates[v][i] = t'.predicates[v][i']) := by
-    -- Proof by induction or well-founded recursion on (n - v)
-    constructor
-    . intro h v
-      unfold exact_at_pos at h
-      unfold Formula.eval_aux at h
-      simp at h
-    . sorry
+  theorem exact_at_pos_eval_all (pos pos': Vector Bool n) (t: Trace n) (l: List (Fin n)) :
+    (exact_at_pos pos l).eval (pos' :: t) → ∀ v ∈ l, (get_exact_var pos v).eval (pos' :: t) := by
+      intro h v hv
+      have h1 : ∀ f ∈ (List.map (get_exact_var pos) l), f.eval (pos'::t) := by
+        unfold exact_at_pos at h
+        simp at h
+        apply foldr_and_aux (List.map (get_exact_var pos) l) (pos'::t)
+        exact h
+      have h2: (get_exact_var pos v) ∈ (List.map (get_exact_var pos) l) := by
+        induction l with
+        | nil => simp at hv
+        | cons hd tl ih =>
+          cases hv
+          . simp
+          . next hm =>
+            simp
+            right
+            exists v
+      apply h1
+      exact h2
 
-  theorem not_eval_aux_exact_at_pos_if_diff_pred (t t': Trace n)
-      (i: Fin t.length) (v: Fin n)
-      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-    ¬(t.exact_at_pos i v).eval_aux t' ⟨i.val, hi⟩ := by
-   unfold exact_at_pos
-   simp
-   split
-   . next hif =>
-                 simp [Formula.eval_aux]
-                 intro he
-                 simp at h
-                 rw [eq_comm] at he
-                 exact absurd he h
-   . next hnif => simp [Formula.eval_aux]
-                  simp at h
-                  rw [eq_comm] at h
-                  exact h
+  theorem exact_eval_head (h h': Vector Bool n) (t t': Trace n):
+    (exact (h::t)).eval (h'::t') → h = h' := by
+      simp [exact, Formula.eval]
+      intro h_eval h2
+      ext i hi
+      have h1 := exact_at_pos_eval_all h h' t' (List.finRange n) h_eval ⟨i, hi⟩ (List.mem_finRange ⟨i, hi⟩)
+      unfold Formula.eval at h1
+      simp [get_exact_var] at h1
+      rw [h1]
 
-  theorem not_eval_aux_exact_at_pos_if_diff_pred_lt (t t': Trace n)
-      (i: Fin t.length) (v v': Fin n) (hv: v' ≤ v)
-      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-    ¬(t.exact_at_pos i v').eval_aux t' ⟨i.val, hi⟩ := by
-    by_cases he: v' = v
-    . rw [he]
-      apply not_eval_aux_exact_at_pos_if_diff_pred <;> assumption
-    . unfold exact_at_pos
-      have hv': v' < n-1 := by omega
-      simp [hv']
-      simp [Formula.eval_aux]
-      intro hp
-      let v'' := v'.val+1
-      have hv'': v'' ≤ v := by omega
-      apply not_eval_aux_exact_at_pos_if_diff_pred_lt t t' i v ⟨v'', by omega⟩ hv'' hi h
+  theorem exact_eval_cons (h h': Vector Bool n) (t t': Trace n):
+    (exact (h::t)).eval (h'::t') → (exact t).eval t' := by
+      intro hyp
+      unfold exact at hyp
+      unfold Formula.eval at hyp
+      simp at hyp
+      have h2 := hyp.right
+      unfold Formula.eval at h2
+      simp at h2
+      exact h2
 
-  theorem not_eval_aux_exact_aux_if_diff_pred (t t': Trace n)
-      (i: Fin t.length) (v: Fin n)
-      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-    ¬(t.exact_aux i).eval_aux t' ⟨i.val, hi⟩ := by
-    unfold exact_aux
-    split
-    . next hif => simp
-                  unfold Formula.eval_aux
-                  rw [Classical.not_and_iff_not_or_not]
-                  left
-                  apply not_eval_aux_exact_at_pos_if_diff_pred_lt
-                  all_goals try assumption
-                  apply Nat.zero_le
-    . next hnif => simp
-                   apply not_eval_aux_exact_at_pos_if_diff_pred_lt
-                   all_goals try assumption
-                   apply Nat.zero_le
-
-
-  theorem not_eval_aux_exact_aux_if_diff_pred_lt (t t': Trace n)
-      (i i': Fin t.length) (hi': i' ≤ i) (v: Fin n)
-      (hi: i < t'.length) (h: t.predicates[v][i] ≠ t'.predicates[v][i]) :
-    ¬(t.exact_aux i').eval_aux t' ⟨i'.val,by omega⟩ := by
-    by_cases he: i = i'
-    . subst he
-      apply not_eval_aux_exact_aux_if_diff_pred <;> assumption
-    . unfold exact_aux
-      simp
-      have h1: i' < t.length - 1 := by omega
-      simp [h1]
-      unfold Formula.eval_aux
-      simp
-      intro h2
-      simp [Formula.eval_aux]
-      intro
-      apply not_eval_aux_exact_aux_if_diff_pred_lt
-      all_goals try assumption
-      rw [Nat.ne_iff_lt_or_gt] at he
-      sorry
+  theorem exact_nil_not_eval_cons (h: Vector Bool n) (t: Trace n):
+    ¬ (exact []).eval (h :: t) := by
+    intro h1
+    unfold exact at h1
+    unfold Formula.eval at h1
+    simp at h1
+    have h2 := h1 0
+    simp [List.drop] at h2
+    simp [Formula.eval] at h2
 
   open Classical
   /-- Soundness: `t.exact` only accepts `t`-/
   theorem exact_eval_only (t t': Trace n):
     (t.exact).eval t' → t = t' := by
-      rw [my_contra]
-      intro hne
-      sorry
+      intro h
+      induction t generalizing t' with
+      | nil =>
+        induction t' with
+        | nil => simp
+        | cons hd' tl' ih' =>
+          simp
+          apply exact_nil_not_eval_cons hd' tl'
+          exact h
+      | cons hd tl ih =>
+        induction t' with
+        | nil => simp [exact, Formula.eval] at h
+        | cons hd' tl' ih' =>
+          simp
+          constructor
+          . exact exact_eval_head hd hd' tl tl' h
+          . apply ih
+            apply exact_eval_cons hd hd'
+            assumption
+
+
+  /-- Correctness of `t.exact` -/
+  theorem exact_correct (t t': Trace n):
+    t.exact.eval t' ↔ t = t' := by
+      constructor
+      . exact exact_eval_only t t'
+      . intro h
+        rw [h]
+        exact exact_eval t'
+
+  theorem exists_accept_only (t: Trace n) :
+    exists (phi: Formula n), phi.eval t ∧
+      forall (t': Trace n), t ≠ t' → ¬phi.eval t' := by
+      exists t.exact
+      constructor
+      . exact t.exact_eval
+      . intro t'
+        intro hne
+        intro he
+        apply hne
+        exact exact_eval_only t t' he
+
 end Trace
 
--- theorem exact_eval (t: Trace n) :
---   exists (phi: Formula n), phi.eval t ∧
---     forall (t': Trace n), t ≠ t' → ¬phi.eval t' := by
---     sorry
+
+def UpperBoundFormula (ts: List (Trace n)) : Formula n :=
+  let fs := ts.map Trace.exact
+  fs.foldr Formula.Or Formula.False
+
+
+theorem foldr_or_aux (l: List (Formula n)) (t: Trace n):
+  ∀ f ∈ l, f.eval t → (l.foldr Formula.Or Formula.False).eval t := by
+      induction l with
+      | nil => simp
+      | cons hd tl ih =>
+        intro f hm he
+        cases hm
+        . unfold List.foldr
+          unfold Formula.eval
+          simp
+          cases t <;> simp <;> left <;> exact he
+        . next h_in =>
+          unfold List.foldr
+          unfold Formula.eval
+          simp
+          cases t <;> simp <;> right <;> apply ih f h_in he
+
+
+theorem foldr_or_aux_rev (l: List (Formula n)) (t: Trace n):
+  (l.foldr Formula.Or Formula.False).eval t → ∃ f ∈ l, f.eval t := by
+      intro h
+      induction l with
+      | nil =>
+        unfold Formula.eval at h
+        cases t <;> simp at h
+      | cons hd tl ih =>
+        unfold List.foldr at h
+        unfold Formula.eval at h
+        simp at h
+        cases t
+          <;> simp at h
+          <;> simp
+          <;> match h with
+            | .inl h1 => left; exact h1
+            | .inr h1 => right; apply ih; exact h1
+
+theorem list_map_contains (l: List α) (f: α → β):
+  (∀b, b ∈ l.map f → ∃ a ∈ l, b = f a) := by
+    induction l with
+    | nil => simp
+    | cons hd tl ih =>
+      intro b hb
+      unfold List.map at hb
+      rw [List.mem_cons] at hb
+      match hb with
+      | .inl h1 => exists hd; simp; assumption
+      | .inr h1 =>
+        have h2 := ih b h1
+        simp [List.mem_cons]
+        right
+        exact h2
+
+
+/-- Theorem X (TODO) from the paper:
+For any disjoint set of positive and negative examples, there exists a formula that accepts the positive rand rejects the negatives.
+-/
+theorem UpperBound (pos: List (Trace n)) (neg: List (Trace n)) (h: ∀ t ∈ pos, ∀ t'∈ neg, t ≠ t') :
+  exists (phi: Formula n), (∀ t ∈ pos, phi.eval t) ∧ (∀t ∈ neg, ¬ phi.eval t):= by
+    exists UpperBoundFormula pos
+    constructor
+    . intro t ht
+      unfold UpperBoundFormula
+      simp
+      apply foldr_or_aux (List.map Trace.exact pos) t (t.exact)
+      . induction pos with
+        | nil => simp at ht
+        | cons hd tl ih =>
+          cases ht
+          . simp
+          . next hm =>
+              simp
+              right
+              simp at h
+              have hr := h.right
+              have h2 := ih hr
+              exists t
+      . exact t.exact_eval
+    . intro t ht he
+      unfold UpperBoundFormula at he
+      simp at he
+      have h1 := foldr_or_aux_rev (List.map Trace.exact pos) t he
+      match h1 with
+      | ⟨f, hf⟩ =>
+        have hf2 : ∃ t ∈ pos, f = t.exact := by
+          apply list_map_contains
+          exact hf.left
+        match hf2 with
+        | ⟨t', ht'⟩ =>
+          have hf3 := hf.right
+          rw [ht'.right] at hf3
+          rw [Trace.exact_correct] at hf3
+          apply h t' ht'.left t ht
+          exact hf3

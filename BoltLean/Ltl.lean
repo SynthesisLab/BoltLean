@@ -1,11 +1,6 @@
 import BoltLean.Helpers
 
-structure Trace (n_pred: Nat) where
-  length: Nat
-  pos_length : length > 0
-  pos_n_pred: n_pred > 0
-  predicates : Vector (Vector Bool length) n_pred
-deriving Repr
+abbrev Trace (n_pred: Nat): Type := List (Vector Bool n_pred)
 
 /-- LTL Formulas in NNF -/
 inductive Formula n_pred
@@ -23,23 +18,73 @@ deriving DecidableEq
 
 namespace Formula
 
-  def eval_aux (phi: Formula n) (t: Trace n) (i: Fin t.length): Prop :=
-    match phi with
-    | True => _root_.True
-    | False => _root_.False
-    | Var v neg => xor t.predicates[v][i] neg
-    | Next psi => if h: i < t.length - 1 then eval_aux psi t ⟨i.val + 1, by omega⟩ else _root_.False
-    | WeakNext psi => (h: i < t.length - 1) → eval_aux psi t ⟨i.val + 1, by omega⟩
-    | Globally psi => ∀ j, j ≥ i  → eval_aux psi t j
-    | Finally psi => ∃ j, j ≥ i ∧ eval_aux psi t j
-    | Or psi1 psi2 => (eval_aux psi1 t i) ∨ (eval_aux psi2 t i)
-    | And psi1 psi2 => (eval_aux psi1 t i) ∧ (eval_aux psi2 t i)
-    | Until psi1 psi2 => ∃ j, j ≥ i ∧
-                              (eval_aux psi2 t j) ∧
-                              (∀ k, i ≤ k → k < j → eval_aux psi1 t k)
+  def eval (phi: Formula n) (t: Trace n): Prop :=
+  match t with
+    | .nil => match phi with
+      | True | WeakNext _ | Globally _ => _root_.True
+      | False | Finally _ | Var _ _ | Next _ |  Until _ _ => _root_.False
+      | Or psi1 psi2 => (eval psi1 t) ∨ (eval psi2 t)
+      | And psi1 psi2 => (eval psi1 t) ∧ (eval psi2 t)
+    | head::tail => match phi with
+      | True => _root_.True
+      | False => _root_.False
+      | Var v neg => xor head[v] neg
+      | Next psi => eval psi tail
+      | WeakNext psi => tail = List.nil ∨ eval psi tail
+      | Globally psi => ∀ j, j < t.length → eval psi (t.drop j)
+      | Finally psi => ∃ j, j < t.length ∧ eval psi (t.drop j)
+      | Or psi1 psi2 => (eval psi1 t) ∨ (eval psi2 t)
+      | And psi1 psi2 => (eval psi1 t) ∧ (eval psi2 t)
+      | Until psi1 psi2 => ∃ j, j < t.length ∧
+                                (eval psi2 (t.drop j)) ∧
+                                (∀ k, k < j → eval psi1 (t.drop k))
 
-  def eval (phi : Formula n) (t : Trace n) : Prop :=
-    eval_aux phi t ⟨0, t.pos_length⟩
+  def equivalence (phi psi : Formula n) : Prop := ∀ (t : Trace n), eval phi t ↔ eval psi t
+
+  theorem congruence_finally (phi1 phi2 : Formula n) :
+  (equivalence phi1 phi2) → equivalence (Finally phi1) (Finally phi2) := by
+  intro h1 h2
+  unfold eval
+  simp
+  match h2 with
+    | List.nil => simp
+    | head::tail => simp
+                    constructor
+                      <;> intro h
+                      <;> have ⟨j, hj⟩ := h
+                      <;> exists j
+                      <;> first | rw [h1] | rw [←h1]
+                      <;> exact hj
+                    exact hj
+
+
+  theorem congruence_globally (phi1 phi2 : Formula n) :
+  (equivalence phi1 phi2) → equivalence (Globally phi1) (Globally phi2) := by
+  intro h1 h2
+  unfold eval
+  simp
+  match h2 with
+    | List.nil => simp
+    | head::tail => simp
+                    constructor
+                      <;> (
+                        intro h j
+                        first | rw [h1] | rw [←h1]
+                        apply h
+                      )
+
+
+
+
+  theorem congruence (phi1 psi1 phi2 psi2 : Formula n) :
+    (equivalence phi1 phi2) → (equivalence psi1 psi2) → equivalence (Until phi1 psi1) (Until phi2 psi2) := by
+      unfold equivalence
+      intro h1 h2
+      sorry
+
+
+
+  theorem simplification_rule (phi : Formula n) : equivalence (Finally (Finally phi)) (Finally phi) := by sorry
 
 
   -- theorem or_eval (phi psi: Formula n) (t: Trace n):
