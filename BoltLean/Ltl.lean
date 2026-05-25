@@ -21,8 +21,8 @@ namespace Formula
   def accepts (phi: Formula n) (t: Trace n): Prop :=
   match t with
     | .nil => match phi with
-      | True | WeakNext _ | Globally _ => _root_.True
-      | False | Finally _ | Var _ _ | Next _ |  Until _ _ => _root_.False
+      | True | Globally _ => _root_.True
+      | False | Finally _ | Var _ _ | Next _ | WeakNext _ | Until _ _ => _root_.False
       | Or psi1 psi2 => (accepts psi1 t) ∨ (accepts psi2 t)
       | And psi1 psi2 => (accepts psi1 t) ∧ (accepts psi2 t)
     | head::tail => match phi with
