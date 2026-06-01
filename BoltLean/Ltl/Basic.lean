@@ -1,5 +1,3 @@
-import BoltLean.Helpers
-
 abbrev Trace (n_pred: Nat): Type := List (Vector Bool n_pred)
 
 /-- LTL Formulas in NNF -/
@@ -40,37 +38,5 @@ namespace Formula
                                 (∀ k, k < j → accepts psi1 (t.drop k))
 
   def equivalence (phi psi : Formula n) : Prop := ∀ (t : Trace n), accepts phi t ↔ accepts psi t
-
-  theorem congruence_finally (phi1 phi2 : Formula n) :
-  (equivalence phi1 phi2) → equivalence (Finally phi1) (Finally phi2) := by
-  intro h1 h2
-  unfold accepts
-  simp
-  match h2 with
-    | List.nil => simp
-    | head::tail => simp
-                    constructor
-                      <;> intro h
-                      <;> have ⟨j, hj⟩ := h
-                      <;> exists j
-                      <;> first | rw [h1] | rw [←h1]
-                      <;> exact hj
-                    exact hj
-
-
-  theorem congruence_globally (phi1 phi2 : Formula n) :
-  (equivalence phi1 phi2) → equivalence (Globally phi1) (Globally phi2) := by
-  intro h1 h2
-  unfold accepts
-  simp
-  match h2 with
-    | List.nil => simp
-    | head::tail => simp
-                    constructor
-                      <;> (
-                        intro h j
-                        first | rw [h1] | rw [←h1]
-                        apply h
-                      )
 
 end Formula

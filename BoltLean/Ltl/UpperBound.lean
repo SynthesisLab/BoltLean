@@ -1,5 +1,4 @@
-import BoltLean.Ltl
-import BoltLean.Helpers
+import BoltLean.Ltl.Basic
 
 namespace Trace
   def get_exact_var (pos: Vector Bool n) (v: Fin n): Formula n :=
