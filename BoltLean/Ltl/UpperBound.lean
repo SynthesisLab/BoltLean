@@ -1,14 +1,22 @@
 import BoltLean.Ltl.Basic
 
 namespace Trace
+  /-- Returns a formula that accepts the value of predicate number `v`,
+  at the given position,
+  i.e. it returns the variable x_v if x_v is true,
+  and ¬x_v otherwise. -/
   def get_exact_var (pos: Vector Bool n) (v: Fin n): Formula n :=
     Formula.Var v (not pos[v])
 
-  /-- Auxiliary function for constructing a formula that is true on t and only on t-/
+  /-- Construct a formula that accepts the value of all predicates listed in `l`
+  at the given position.
+  To build the `exact` function, this function is called with `List.finRange n`,
+  but having `l` as a free parameter makes proofs easier.-/
   def exact_at_pos (pos: Vector Bool n) (l: List (Fin n)): Formula n :=
     let all_var := l.map (get_exact_var pos)
-    all_var.foldr (fun phi psi => phi.And psi) Formula.True
+    all_var.foldr Formula.And Formula.True
 
+  /-- Return a formula that accepts `t` and rejects all other traces.-/
   def exact (t: Trace n) : Formula n :=
     match t with
     | .nil => Formula.False.Globally
@@ -41,9 +49,8 @@ namespace Trace
       . exact ih
 
   -- Soundness
-  /-- Taking the `And` of a list of formulas and evaluating is the same as
-  evaluating and taking the `And`.
-  -/
+  /-- Lemma: Taking the `And` of a list of formulas and evaluating is the same as
+  evaluating and taking the Boolean `And`.-/
   theorem foldr_and_aux (l: List (Formula n)) (t: Trace n):
     (l.foldr Formula.And Formula.True).accepts t
       → ∀ f ∈ l, f.accepts t := by
@@ -62,6 +69,7 @@ namespace Trace
             simp [*] at he
             cases t <;> simp at he <;> apply ih he.right f h_in
 
+  /-- Lemma: If `exact_at_pos pos l` accepts, then `get_exact_var pos v` also accepts for all `v ∈ l`-/
   theorem exact_at_pos_accepts_all (pos pos': Vector Bool n) (t: Trace n) (l: List (Fin n)) :
     (exact_at_pos pos l).accepts (pos' :: t) → ∀ v ∈ l, (get_exact_var pos v).accepts (pos' :: t) := by
       intro h v hv
@@ -83,6 +91,7 @@ namespace Trace
       apply h1
       exact h2
 
+  /-- Lemma: If `exact t` accepts `t'`, then `t` and `t'` have the same head.-/
   theorem exact_accepts_head (h h': Vector Bool n) (t t': Trace n):
     (exact (h::t)).accepts (h'::t') → h = h' := by
       simp [exact, Formula.accepts]
@@ -93,6 +102,7 @@ namespace Trace
       simp [get_exact_var] at h1
       rw [h1]
 
+  /-- Lemma: If `exact t` accepts `t'`, then `t` and `t'` have the same tail.-/
   theorem exact_accepts_cons (h h': Vector Bool n) (t t': Trace n):
     (exact (h::t)).accepts (h'::t') → (exact t).accepts t' := by
       intro hyp
@@ -104,6 +114,7 @@ namespace Trace
       simp at h2
       exact h2
 
+  /-- Lemma: `exact` of the empty trace does not accept non-empty traces.-/
   theorem exact_nil_not_accepts_cons (h: Vector Bool n) (t: Trace n):
     ¬ (exact []).accepts (h :: t) := by
     intro h1
@@ -139,7 +150,7 @@ namespace Trace
             assumption
 
 
-  /-- Correctness of `t.exact` -/
+  /-- Correctness and soundness of `t.exact` -/
   theorem exact_correct (t t': Trace n):
     t.exact.accepts t' ↔ t = t' := by
       constructor
@@ -162,12 +173,14 @@ namespace Trace
 
 end Trace
 
-
+/-- Given a list of traces, construct a formula that accepts
+exactly these traces, and no other. -/
 def UpperBoundFormula (ts: List (Trace n)) : Formula n :=
   let fs := ts.map Trace.exact
   fs.foldr Formula.Or Formula.False
 
-
+/-- Lemma: If all formulas in a list accept `t`,
+then the `Or` of this list also accepts `t`.-/
 theorem foldr_or_aux (l: List (Formula n)) (t: Trace n):
   ∀ f ∈ l, f.accepts t → (l.foldr Formula.Or Formula.False).accepts t := by
       induction l with
@@ -186,6 +199,9 @@ theorem foldr_or_aux (l: List (Formula n)) (t: Trace n):
           cases t <;> simp <;> right <;> apply ih f h_in he
 
 
+
+/-- Lemma: If the `Or` of a list of formulas accepts `t`,
+then some formula in the list accepts `t`.-/
 theorem foldr_or_aux_rev (l: List (Formula n)) (t: Trace n):
   (l.foldr Formula.Or Formula.False).accepts t → ∃ f ∈ l, f.accepts t := by
       intro h
@@ -221,8 +237,9 @@ theorem list_map_contains (l: List α) (f: α → β):
         exact h2
 
 
-/-- Theorem X (TODO) from the paper:
-For any disjoint set of positive and negative examples, there exists a formula that accepts the positive rand rejects the negatives.
+/-- Theorem:
+For any disjoint set of positive and negative examples,
+there exists a formula that accepts all the positive and rejects the negatives.
 -/
 theorem UpperBound (pos: List (Trace n)) (neg: List (Trace n)) (h: ∀ t ∈ pos, ∀ t'∈ neg, t ≠ t') :
   exists (phi: Formula n), (∀ t ∈ pos, phi.accepts t) ∧ (∀t ∈ neg, ¬ phi.accepts t):= by
