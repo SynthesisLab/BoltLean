@@ -265,16 +265,12 @@ theorem UpperBound (pos: List (Trace n)) (neg: List (Trace n)) (h: ∀ t ∈ pos
     . intro t ht he
       unfold UpperBoundFormula at he
       simp at he
-      have h1 := foldr_or_aux_rev (List.map Trace.exact pos) t he
-      match h1 with
-      | ⟨f, hf⟩ =>
-        have hf2 : ∃ t ∈ pos, f = t.exact := by
-          apply list_map_contains
-          exact hf.left
-        match hf2 with
-        | ⟨t', ht'⟩ =>
-          have hf3 := hf.right
-          rw [ht'.right] at hf3
-          rw [Trace.exact_correct] at hf3
-          apply h t' ht'.left t ht
-          exact hf3
+      have ⟨f, hf⟩ := foldr_or_aux_rev (List.map Trace.exact pos) t he
+      have ⟨t', ht'⟩ : ∃ t ∈ pos, f = t.exact := by
+        apply list_map_contains
+        exact hf.left
+      have hf3 := hf.right
+      rw [ht'.right] at hf3
+      rw [Trace.exact_correct] at hf3
+      apply h t' ht'.left t ht
+      exact hf3
